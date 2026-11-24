@@ -351,7 +351,8 @@ async function registrarPorta(d) {
 /* ------------------------------ Dados ----------------------------- */
 
 let _db;
-function db() { return _db || (_db = getStore({ name: NOME_STORE, consistency: 'strong' })); }
+// Uma conexão nova a cada pedido: a autorização do Netlify Blobs expira entre execuções.
+function db() { return _db || getStore({ name: NOME_STORE, consistency: 'strong' }); }
 export function _usarStore(s) { _db = s; } // usado só nos testes
 
 async function cfg() {
