@@ -76,9 +76,19 @@ export async function api(acao, d, token) {
   const portaria = { eu: async () => ({ papel }), portaria: portariaLista, checkin, registrarPorta };
   if (portaria[acao]) return { ok: true, data: await portaria[acao](d) };
 
-  const admin = { listar, salvarConvidado, excluir, salvarConfig, marcarAviso, gerarConsulta, revogar: revogarAcao, trocarSenha };
+  if (papel === 'portaria') return { ok: false, erro: 'PERMISSAO', msg: 'Esta conta é apenas da portaria.' };
+  // Visualização: só lê
+  if (acao === 'listar') return { ok: true, data: { ...(await listar()), papel } };
+  // Edição: mexe em convidados, avisos e evento
+  const edicao = { salvarConvidado, excluir, salvarConfig, marcarAviso };
+  if (edicao[acao]) {
+    if (papel !== 'admin' && papel !== 'editor') return { ok: false, erro: 'PERMISSAO', msg: 'Seu acesso é só de visualização.' };
+    return { ok: true, data: await edicao[acao](d) };
+  }
+  // Somente admin: acessos e usuários
+  const admin = { gerarConsulta, revogar: revogarAcao, trocarSenha, usuarios, salvarUsuario, excluirUsuario };
   if (admin[acao]) {
-    if (papel !== 'admin') return { ok: false, erro: 'PERMISSAO', msg: 'Esta conta é apenas de consulta.' };
+    if (papel !== 'admin') return { ok: false, erro: 'PERMISSAO', msg: 'Só o admin pode fazer isso.' };
     return { ok: true, data: await admin[acao](d) };
   }
   return { ok: false, msg: 'Ação desconhecida.' };
@@ -148,6 +158,15 @@ async function login(d) {
   if (f.ate > Date.now()) throw new Error('Muitas tentativas. Aguarde 15 minutos.');
   const a = await auth();
   const digitado = String(d.senha || '').trim();
+  const usuario = String(d.usuario || '').trim().toLowerCase();
+  // Usuário de edição/visualização criado pelo admin
+  if (papel === 'admin' && usuario && usuario !== 'admin') {
+    const u = (a.usuarios || {})[usuario];
+    if (u && iguais(hashSenha(digitado, a.sal), u.hash)) { await db().delete(kf); return { token: await novoToken(u.papel, usuario) }; }
+    f.n = (f.ate && f.ate < Date.now()) ? 1 : f.n + 1; f.ate = f.n >= 8 ? Date.now() + 15 * 60 * 1000 : 0; if (f.n >= 8) f.n = 0;
+    await db().setJSON(kf, f);
+    throw new Error('Usuário ou senha incorretos.');
+  }
   const ok = a[papel] && iguais(hashSenha(papel === 'portaria' ? digitado.toUpperCase() : digitado, a.sal), a[papel]);
   if (!ok) {
     f.n = (f.ate && f.ate < Date.now()) ? 1 : f.n + 1;
@@ -260,6 +279,36 @@ async function trocarSenha(d) {
   return { token: await novoToken('admin') };
 }
 
+/* ----------------------------- Usuários --------------------------- */
+
+async function usuarios() {
+  const a = await auth();
+  return Object.entries(a.usuarios || {}).map(([usuario, u]) => ({ usuario, nome: u.nome, papel: u.papel, criadoEm: u.criadoEm }));
+}
+
+async function salvarUsuario(d) {
+  const usuario = String(d.usuario || '').trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,30}$/.test(usuario) || usuario === 'admin') throw new Error('Usuário: 3 a 30 letras minúsculas, números, ponto ou traço (sem espaço).');
+  const papel = d.papel === 'editor' ? 'editor' : 'leitor';
+  const a = await auth();
+  a.usuarios = a.usuarios || {};
+  const atual = a.usuarios[usuario];
+  const senha = String(d.senha || '');
+  if (!atual && senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  if (senha && senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  a.usuarios[usuario] = { nome: limpa(d.nome, 60) || usuario, papel, hash: senha ? hashSenha(senha, a.sal) : atual.hash, criadoEm: atual ? atual.criadoEm : agoraTxt() };
+  await db().setJSON('auth', a);
+  return usuarios();
+}
+
+async function excluirUsuario(d) {
+  const a = await auth();
+  const usuario = String(d.usuario || '').toLowerCase();
+  if (a.usuarios) delete a.usuarios[usuario];
+  await db().setJSON('auth', a);
+  return usuarios();
+}
+
 /* ----------------------------- Portaria --------------------------- */
 
 async function portariaLista() {
@@ -322,9 +371,9 @@ async function todos() {
   return itens.filter(Boolean);
 }
 
-async function novoToken(papel) {
+async function novoToken(papel, usuario) {
   const t = crypto.randomBytes(32).toString('hex');
-  await db().setJSON('tk/' + sha(t), { papel, em: agoraTxt() });
+  await db().setJSON('tk/' + sha(t), { papel, usuario: usuario || '', em: agoraTxt() });
   return t;
 }
 
@@ -333,6 +382,7 @@ async function papelDo(token) {
   const v = await db().get('tk/' + sha(token), { type: 'json' });
   if (!v) return '';
   if (v.papel === 'portaria' && !(await auth()).portaria) return '';
+  if (v.usuario) { const u = ((await auth()).usuarios || {})[v.usuario]; if (!u) return ''; return u.papel; }
   return v.papel;
 }
 

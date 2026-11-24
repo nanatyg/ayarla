@@ -122,6 +122,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .av .quando{font-size:14px;color:var(--mut);margin:2px 0 8px}
 .av.hoje{border:2px solid var(--p)}
 .muted{color:var(--mut)}
+.leitor #novo,.leitor [data-ed],.leitor [data-del],.leitor [data-env],.leitor [data-salva],.leitor [data-li],.leitor #todosLista,.leitor .av details{display:none}
 .load{padding:80px 0;text-align:center;color:var(--mut)}
 .load img{width:80px;mix-blend-mode:multiply;display:block;margin:0 auto 10px}
 @media(max-width:600px){
@@ -344,7 +345,7 @@ function telaLogin(papel, criar){
     ? (criar ? 'Primeiro acesso: crie a senha de admin. Neste aparelho você não precisará entrar de novo.' : 'Digite a senha de admin. Este aparelho fica conectado.')
     : 'Digite o código que você recebeu. Este aparelho fica conectado até o fim do evento.';
   app.innerHTML = '<div class="papel"><form class="card" id="lg" style="margin-top:9vh;text-align:center"><img class="laco-d" src="/lacinho.png" alt="" style="margin-top:0"><h1 class="script" style="font-size:56px">'+tit+'</h1><p class="caps" style="font-size:13px;margin:6px 0 4px">Aniversário da Ayarla</p><p class="muted">'+ajuda+'</p>'
-    + '<div style="text-align:left"><label class="t" for="s">'+(papel==='admin'?'Senha':'Código')+'</label><input type="'+(papel==='admin'?'password':'text')+'" id="s" autocomplete="'+(criar?'new-password':'current-password')+'" '+(papel==='portaria'?'autocapitalize="characters" style="text-transform:uppercase;letter-spacing:.14em"':'')+'>'
+    + '<div style="text-align:left">'+(papel==='admin'&&!criar?'<label class="t" for="u">Usuário</label><input type="text" id="u" autocomplete="username" autocapitalize="none" value="admin"><div class="hint">Use "admin" só se for a Natalia; equipe usa o usuário recebido.</div>':'')+'<label class="t" for="s">'+(papel==='admin'?'Senha':'Código')+'</label><input type="'+(papel==='admin'?'password':'text')+'" id="s" autocomplete="'+(criar?'new-password':'current-password')+'" '+(papel==='portaria'?'autocapitalize="characters" style="text-transform:uppercase;letter-spacing:.14em"':'')+'>'
     + (criar ? '<label class="t" for="s2">Repita a senha</label><input type="password" id="s2" autocomplete="new-password">' : '') + '</div>'
     + '<button class="full" style="margin-top:20px">'+(criar?'Criar e entrar':'Entrar')+'</button><div class="msg" id="m" role="status"></div></form></div>';
   const f = document.getElementById('lg');
@@ -352,7 +353,7 @@ function telaLogin(papel, criar){
     e.preventDefault(); const m = document.getElementById('m');
     const s = f.s.value; if (criar && s !== f.s2.value) return setMsg(m, 'As senhas não são iguais.', 'err');
     f.querySelector('button').disabled = true; setMsg(m, 'Verificando…');
-    try { const r = await call(criar ? 'criarAdmin' : 'login', { senha: s, papel }); store.set(tkKey, r.token); iniciar(); }
+    try { const r = await call(criar ? 'criarAdmin' : 'login', { senha: s, papel, usuario: f.u ? f.u.value : '' }); store.set(tkKey, r.token); iniciar(); }
     catch(err){ setMsg(m, err.message, 'err'); f.querySelector('button').disabled = false; }
   });
 }
@@ -399,14 +400,18 @@ function tagLista(g){ if (g.vai === 'nao') return '<span class="tag x">Não vai<
 function fmtZap(z){ z = String(z||''); const m = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(z); return m ? '('+m[1]+') '+m[2]+'-'+m[3] : z; }
 
 function desenhaAdmin(){
-  const abas = [['resumo','Resumo'],['convidados','Convidados'],['avisos','Avisos WhatsApp'],['evento','Evento'],['acessos','Links e acessos']];
+  const P_ = A.papel || 'admin';
+  const abas = [['resumo','Resumo'],['convidados','Convidados'],['avisos','Avisos WhatsApp']].concat(P_!=='leitor'?[['evento','Evento']]:[]).concat(P_==='admin'?[['acessos','Links e acessos']]:[]);
+  if (!abas.some(a => a[0] === aba)) aba = 'resumo';
+  app.classList.toggle('leitor', P_ === 'leitor');
   const pend = abaPendencias();
-  app.innerHTML = '<div class="papel"><div class="top"><div><h1 class="script">'+esc(CFG.titulo)+'</h1><div class="caps">'+esc(faltamTxt(diasEntre(A.hoje, CFG.data)))+' · '+(CFG.prazo?'confirmações até '+esc(dataCurta(CFG.prazo))+(A.encerrado?' (encerrado)':''):'sem prazo definido')+'</div></div>'
-    + '<button class="ghost peq" id="atual">Atualizar</button></div>'
+  app.innerHTML = '<div class="papel"><div class="top"><div><h1 class="script">'+esc(CFG.titulo)+'</h1><div class="caps">'+(A.papel==='editor'?'Edição · ':A.papel==='leitor'?'Visualização · ':'')+esc(faltamTxt(diasEntre(A.hoje, CFG.data)))+' · '+(CFG.prazo?'confirmações até '+esc(dataCurta(CFG.prazo))+(A.encerrado?' (encerrado)':''):'sem prazo definido')+'</div></div>'
+    + '<div class="tools" style="margin:0"><button class="ghost peq" id="atual">Atualizar</button>'+(A.papel!=='admin'?'<button class="ghost peq" id="sairTop">Sair</button>':'')+'</div></div>'
     + pend
     + '<nav class="tabs" role="tablist">'+abas.map(a=>'<button role="tab" data-aba="'+a[0]+'" aria-selected="'+(aba===a[0])+'">'+a[1]+'</button>').join('')+'</nav><div id="corpo"></div></div>';
   app.querySelector('.tabs').onclick = e => { const b = e.target.closest('[data-aba]'); if (b) { aba = b.dataset.aba; desenhaAdmin(); } };
   document.getElementById('atual').onclick = async e => { e.target.disabled = true; try { await recarrega(); } catch(err){ e.target.disabled = false; } };
+  const st = document.getElementById('sairTop'); if (st) st.onclick = () => { store.del(tkKey); iniciar(); };
   const ir = document.getElementById('irAvisos'); if (ir) ir.onclick = () => { aba = 'avisos'; desenhaAdmin(); };
   ({ resumo: abaResumo, convidados: abaConvidados, avisos: abaAvisos, evento: abaEvento, acessos: abaAcessos })[aba](document.getElementById('corpo'));
 }
@@ -622,6 +627,10 @@ function abaAcessos(el){
     + lk('Link da portaria', u + '/portaria', 'l3', 'Para quem confere a entrada: consulta, chegada e registro de quem chegou sem confirmar.')
     + '<div class="card" style="margin-bottom:12px"><b>Código da portaria</b><p class="muted" style="font-size:14px;margin:2px 0 10px">'+(A.portariaAtiva?'Há um código ativo. Gerar outro desconecta quem estiver usando o anterior.':'Nenhum código ativo.')+'</p><div id="cod"></div>'
     + '<div class="tools" style="margin:0"><button id="gerar">'+(A.portariaAtiva?'Gerar novo código':'Gerar código')+'</button>'+(A.portariaAtiva?'<button class="ghost" id="desat">Desativar portaria</button>':'')+'</div></div>'
+    + '<div class="card" style="margin-bottom:12px"><b>Usuários da equipe</b><p class="muted" style="font-size:14px;margin:2px 0 10px">Entram pelo link do admin com usuário e senha próprios. <b>Edição</b>: convidados, avisos e evento. <b>Visualização</b>: só consulta. Links, códigos e usuários ficam só com você.</p><div id="ulista" class="muted">Carregando…</div>'
+    + '<form id="uf" style="margin-top:10px"><div class="row"><div><label class="t">Nome</label><input type="text" name="nome" maxlength="60" placeholder="Ex.: Ayarla"></div><div><label class="t">Usuário (sem espaço)</label><input type="text" name="usuario" autocapitalize="none" placeholder="ex.: ayarla"></div></div>'
+    + '<div class="row"><div><label class="t">Senha (mín. 6)</label><input type="text" name="senha" autocomplete="off"></div><div><label class="t">Acesso</label><select name="papel"><option value="editor">Edição</option><option value="leitor">Visualização</option></select></div></div>'
+    + '<button class="sec" style="margin-top:14px">Salvar usuário</button><div class="msg" id="um"></div><div class="hint">Para trocar a senha de alguém, salve de novo o mesmo usuário com a senha nova.</div></form></div>'
     + '<form class="card" id="ts"><b>Trocar senha do admin</b><div class="row"><div><label class="t">Senha atual</label><input type="password" name="atual" autocomplete="current-password"></div><div><label class="t">Nova senha</label><input type="password" name="nova" autocomplete="new-password"></div></div><button class="sec" style="margin-top:14px">Trocar senha</button><div class="msg" id="tm"></div></form>'
     + '<div class="tools" style="margin-top:16px"><button class="ghost" id="sair">Sair deste aparelho</button></div>';
   el.addEventListener('click', async e => {
@@ -639,6 +648,16 @@ function abaAcessos(el){
       try { await call('revogar', { papel: 'portaria', desativar: true }); await recarrega(); } catch(_){}
     }
     if (e.target.id === 'sair') { store.del(tkKey); iniciar(); }
+  });
+  const desenhaU = lst => { const el2 = document.getElementById('ulista'); if (!el2) return;
+    el2.innerHTML = lst.length ? '<div class="box"><table class="stack"><thead><tr><th>Nome</th><th>Usuário</th><th>Acesso</th><th></th></tr></thead><tbody>'+lst.map(u=>'<tr><td>'+esc(u.nome)+'</td><td>'+esc(u.usuario)+'</td><td><span class="tag '+(u.papel==='editor'?'d':'x')+'">'+(u.papel==='editor'?'Edição':'Visualização')+'</span></td><td><button class="ghost peq" data-xu="'+esc(u.usuario)+'">Remover</button></td></tr>').join('')+'</tbody></table></div>' : 'Nenhum usuário criado ainda.'; };
+  call('usuarios').then(desenhaU).catch(()=>{});
+  document.getElementById('ulista').addEventListener('click', async e => { const b = e.target.closest('[data-xu]'); if (!b) return; if (await confirma('Remover o acesso de '+b.dataset.xu+'? Ela sai na hora.', 'Remover')) { try { desenhaU(await call('excluirUsuario', { usuario: b.dataset.xu })); } catch(err){ alertaErro(err); } } });
+  document.getElementById('uf').addEventListener('submit', async e => {
+    e.preventDefault(); const f = e.target, m = document.getElementById('um');
+    try { desenhaU(await call('salvarUsuario', { nome: f.nome.value, usuario: f.usuario.value, senha: f.senha.value, papel: f.papel.value }));
+      setMsg(m, 'Salvo. Envie: link '+location.origin+'/admin · usuário '+f.usuario.value.trim().toLowerCase()+' · senha '+f.senha.value, 'ok'); f.reset(); }
+    catch(err){ setMsg(m, err.message, 'err'); }
   });
   document.getElementById('ts').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target;
