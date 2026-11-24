@@ -30,6 +30,13 @@ h1,h2,h3{margin:0;line-height:1.1;text-wrap:balance;font-weight:500}
 .wrap{max-width:620px;margin:0 auto;padding:18px 16px 70px;position:relative}
 .wide{max-width:1120px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 12px 34px rgba(178,71,110,.07)}
+.hero{position:relative;min-height:440px;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:center;padding:30px 6px 26px clamp(120px,34vw,220px)}
+.hero::before{content:"";position:absolute;left:-16px;top:-18px;bottom:0;width:clamp(150px,42vw,260px);background:url(/fundo-laco.jpg) top left/cover no-repeat;mix-blend-mode:multiply;-webkit-mask-image:radial-gradient(115% 95% at 0 0,#000 55%,transparent 100%);mask-image:radial-gradient(115% 95% at 0 0,#000 55%,transparent 100%)}
+.hero>*{position:relative;width:100%}
+.hero .de{font-family:'Cormorant Garamond',serif;font-weight:500;letter-spacing:.2em;font-size:clamp(20px,5.4vw,28px);color:#a3466a}
+.hero .nm{font-family:'Great Vibes',cursive;color:#b85a7c;line-height:.82;font-size:clamp(72px,20vw,118px);margin-top:8px}
+.hero .nm span{display:block;padding-left:.5em}
+.hero .fr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(19px,5vw,24px);letter-spacing:.06em;color:#a3466a;margin-top:18px}
 .arte{display:block;width:100%;height:auto;border-radius:24px;box-shadow:0 16px 40px rgba(178,71,110,.16)}
 .det{display:grid;gap:12px;margin-top:14px}
 .det div{display:grid;grid-template-columns:7.2em 1fr;gap:10px}
@@ -226,7 +233,7 @@ function cabecalho(info){
     c.traje && ['Dress code', esc(c.traje)],
     (c.presente || c.presenteDetalhe) && ['Presente', esc(c.presente) + (c.presenteDetalhe ? (c.presente ? '<br>' : '') + '<span style="opacity:.6">'+esc(c.presenteDetalhe)+'</span>' : '')]
   ].filter(Boolean);
-  return '<img class="arte" src="/convite.jpg" width="900" height="1248" alt="Convite: Aniversário de Ayarla Souza, 28 anos. Venha celebrar comigo este dia tão especial! 03 de dezembro de 2026, às 18 horas, no Salão de Festa, Av. Atlântica s/n, Terras Alphaville 2, Eusébio-CE. Dress code: branco, off white, bege ou nude.">'
+  return '<section class="hero"><div class="de">Aniversário de</div><h1 class="nm">Ayarla<span>Souza</span></h1><div class="fr">Venha celebrar comigo<br>este dia tão especial!</div></section>'
     + (linhas.length ? '<div class="card det" style="margin-top:16px">'+linhas.map(l=>'<div><b>'+l[0]+'</b><span>'+l[1]+'</span></div>').join('')+'</div>' : '');
 }
 
@@ -260,6 +267,7 @@ function formConvite(info, v){
     + '</div>'
     + '<label class="t" for="obs">Recado para a aniversariante (opcional)</label><textarea id="obs" maxlength="400">'+esc(v.observacoes)+'</textarea>'
     + '<label class="check" id="lbAv"><input type="checkbox" id="avisos" '+(v.aceitaAvisos!==false?'checked':'')+'><span>Quero receber pelo WhatsApp os avisos do aniversário: cadastro na portaria do condomínio, lembrete e informações do dia.'+(c.whatsappAvisos?'<br><span class="muted" style="font-size:14px">Para receber, salve nos seus contatos o número <b>'+esc(fmtZap(c.whatsappAvisos))+'</b>.</span>':'')+'</span></label>'
+    + '<label class="check" id="lbDc"><input type="checkbox" id="dresscode"><span>Estou ciente do dress code do aniversário'+(c.traje?': <b>'+esc(c.traje)+'</b>':'')+'.</span></label>'
     + '<button class="full" style="margin-top:22px" id="enviar">Enviar resposta</button><div class="msg" id="m" role="status"></div>'
     + '</form>';
 
@@ -270,6 +278,7 @@ function formConvite(info, v){
     const sim = atual() === 'sim';
     document.getElementById('blocoSim').hidden = !sim;
     document.getElementById('lbAv').hidden = !sim;
+    document.getElementById('lbDc').hidden = !sim;
     const bi = document.getElementById('blocoIdades');
     if (bi) bi.hidden = +document.getElementById('criancas').textContent === 0;
   };
@@ -298,6 +307,7 @@ function formConvite(info, v){
     if (d.nome.length < 2) return setMsg(m, 'Escreva seu nome.', 'err');
     if (d.whatsapp.replace(/\D/g,'').length < 10) return setMsg(m, 'Escreva seu WhatsApp com DDD.', 'err');
     if (sim && nCri && !d.idadesCriancas) return setMsg(m, 'Informe a idade de cada criança.', 'err');
+    if (sim && !document.getElementById('dresscode').checked) return setMsg(m, 'Confirme que está ciente do dress code.', 'err');
     if (sim && !d.alergias.length && !d.alergiaOutra) return setMsg(m, 'Marque as alergias do grupo ou "Nenhuma".', 'err');
     b.disabled = true; setMsg(m, 'Enviando…');
     try {
@@ -316,7 +326,7 @@ function obrigado(info, r){
   else if (r.lista === 'adicional') { t = 'Recebemos!'; s = pn + ', como o prazo já terminou, sua confirmação entrou na <b>lista de confirmação adicional</b>. A '+an+' vai falar com você.'; }
   else { t = 'Presença confirmada!'; s = pn + ', que alegria! A '+an+' conta com você ' + (c.data ? 'na '+esc(dataLonga(c.data)) : '') + (c.hora ? ', às '+esc(c.hora.replace(':00','h')) : '') + '.'; }
   const cond = r.linkCondominio ? '<div class="aviso hoje" style="text-align:left"><b>Cadastro na portaria do condomínio</b><br>Para entrar no dia, faça o cadastro de todos que vão com você.<div style="margin-top:10px">'+link(r.linkCondominio,'Fazer cadastro agora','btn full')+'</div></div>' : '';
-  app.innerHTML = '<img class="arte" src="/convite.jpg" width="900" height="1248" alt="Convite do aniversário de Ayarla Souza">'
+  app.innerHTML = '<section class="hero"><div class="de">Aniversário de</div><h1 class="nm">Ayarla<span>Souza</span></h1><div class="fr">Venha celebrar comigo<br>este dia tão especial!</div></section>'
     + '<div class="card done" style="margin-top:16px"><img class="laco-d" src="/lacinho.png" alt="" style="margin-top:0"><h2 class="script">'+t+'</h2><p>'+s+'</p>'
     + (r.vai === 'sim' && !r.linkCondominio && r.lista === 'principal' ? '<p class="muted" style="font-size:15px">Perto da data você recebe pelo WhatsApp o link para o cadastro na portaria do condomínio.'+(c.whatsappAvisos?' Salve o número <b>'+esc(fmtZap(c.whatsappAvisos))+'</b> nos seus contatos para receber.':'')+'</p>' : '')
     + cond + '<button class="sec" id="alt" style="margin-top:8px">Alterar minha resposta</button></div>';
